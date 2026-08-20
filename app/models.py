@@ -1,14 +1,24 @@
-from sqlalchemy import Float, ForeignKey, Integer, String
+from sqlalchemy import Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
 
 class Competition(Base):
+    """One tournament-season, e.g. ('FIFA World Cup', '2018').
+
+    Note the composite unique key: successive editions of the same tournament
+    share a statsbomb_competition_id and differ only by season, so neither
+    column is unique on its own.
+    """
+
     __tablename__ = "competitions"
+    __table_args__ = (
+        UniqueConstraint("statsbomb_competition_id", "statsbomb_season_id", name="uq_competition_season"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    statsbomb_competition_id: Mapped[int] = mapped_column(Integer, unique=True)
+    statsbomb_competition_id: Mapped[int] = mapped_column(Integer)
     statsbomb_season_id: Mapped[int] = mapped_column(Integer)
     competition_name: Mapped[str] = mapped_column(String(120))
     season_name: Mapped[str] = mapped_column(String(50))
@@ -30,7 +40,13 @@ class Player(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     statsbomb_player_id: Mapped[int] = mapped_column(Integer, unique=True)
     player_name: Mapped[str] = mapped_column(String(150))
+
+    # The position this player appeared in most often across all their matches.
+    # Backfilled after ingestion (see scripts/ingest_data.py:backfill_primary_positions)
+    # rather than written per-match, so a single benched appearance can't erase it.
     primary_position: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    primary_position_role: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    primary_position_group: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     stats: Mapped[list["PlayerMatchStat"]] = relationship(back_populates="player")
 
@@ -54,8 +70,13 @@ class Match(Base):
 
 
 class PlayerMatchStat(Base):
-    """One row per player per match: basic aggregated performance stats
-    derived from StatsBomb event data (passes, shots, defensive actions)."""
+    """One row per player per match they actually appeared in: aggregated
+    performance stats derived from StatsBomb event data.
+
+    Players named in a matchday squad but never brought on are deliberately not
+    stored -- a non-appearance has no stats, and keeping all-zero rows would
+    silently drag down every AVG() the SQL agent writes.
+    """
 
     __tablename__ = "player_match_stats"
 
@@ -63,7 +84,12 @@ class PlayerMatchStat(Base):
     match_id: Mapped[int] = mapped_column(ForeignKey("matches.id"))
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id"))
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id"))
-    position: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    # position: raw StatsBomb label ("Left Center Back"); role/group are the
+    # normalised tiers from app.positions so queries can filter at any level.
+    position: Mapped[str] = mapped_column(String(50))
+    position_role: Mapped[str] = mapped_column(String(50))
+    position_group: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     minutes_played: Mapped[int] = mapped_column(Integer, default=0)
     passes_attempted: Mapped[int] = mapped_column(Integer, default=0)
