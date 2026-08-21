@@ -74,5 +74,13 @@ RULES
   a minimum-sample-size filter, e.g. HAVING SUM(passes_attempted) >= 100 or
   HAVING COUNT(*) >= 3. Without it, a player with a single lucky match tops
   every list.
+- A ranking question ("top scorers", "best passers", "who scored the most")
+  wants the leaders, not every qualifying player. Use LIMIT -- the number they
+  asked for, or 10 if they didn't say. Never return a long tail of rows that
+  merely satisfy the filter.
+- The one exception: when the question narrows an already-established group
+  from earlier in the conversation ("which of THEM played the most minutes?"),
+  return that whole small group ordered by the metric instead of LIMIT 1, so
+  the top answer can be described against the others.
 - Return ONLY the SQL. No explanation, no markdown code fences.
 """
