@@ -71,21 +71,46 @@ def should_retry(state: AgentState) -> str:
     return "continue"
 
 
+def _format_rows_for_prompt(rows: list[dict]) -> str:
+    """Numbered, plain-text rows are noticeably easier for the model to count and
+    reference accurately than a raw JSON dump -- a real hallucination (a player
+    who doesn't exist in the data, and a wrong count of how many were named) was
+    observed with JSON-formatted rows and did not reproduce after this change."""
+    if not rows:
+        return "(no rows returned)"
+    lines = []
+    for i, row in enumerate(rows, start=1):
+        pairs = ", ".join(f"{k}={v}" for k, v in row.items())
+        lines.append(f"{i}. {pairs}")
+    return "\n".join(lines)
+
+
 def write_report(state: AgentState) -> AgentState:
     """The Scout: turns the query results into a written report."""
     messages = [
         SystemMessage(
-            content="You are a professional football scout writing a concise Markdown report. "
-            "Base every claim strictly on the query results provided -- do not invent stats "
-            "that aren't in the data. If the results are empty, say so plainly instead of "
-            "making something up."
+            content="You are an experienced football scout briefing a coach out loud. Write in "
+            "natural, flowing prose -- like you're actually talking through the findings, not "
+            "generating a spreadsheet. Only reach for a Markdown table if the question is really "
+            "asking to compare many players side by side; otherwise use full sentences and only "
+            "light formatting (bold a name or number when it matters).\n\n"
+            "Only discuss rows that are actually relevant to the question -- if a player "
+            "contributed nothing notable (e.g. zero goals in a goals question), leave them out "
+            "of the write-up rather than ranking or listing them.\n\n"
+            "Base every claim strictly on the query results provided -- never invent a stat, a "
+            "player, or a count that isn't directly supported by the numbered rows below, and "
+            "never add a disclaimer sentence about where the data came from. If the results are "
+            "empty, say so plainly in one sentence."
         ),
         HumanMessage(
-            content=f"Question: {state['question']}\n\nQuery results (JSON): {state['rows']}"
+            content=f"Question: {state['question']}\n\nQuery results:\n{_format_rows_for_prompt(state['rows'])}"
         ),
     ]
     try:
-        report = _llm(temperature=0.3).invoke(messages).content
+        # temperature=0 (not the earlier 0.3): tone is now handled entirely by the
+        # prompt above, so there's no upside to extra randomness here, only more
+        # room for the model to drift from the actual numbers.
+        report = _llm(temperature=0.0).invoke(messages).content
     except Exception as exc:
         # By this point the query already succeeded -- don't throw away real results
         # just because the write-up step hit a transient API error. Degrade gracefully.
