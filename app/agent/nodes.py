@@ -1,5 +1,5 @@
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -13,10 +13,8 @@ MAX_RETRIES = 2
 QUERY_TIMEOUT_MS = 5000  # guards against an accidental runaway query (e.g. a stray cross join)
 
 
-def _llm(temperature: float = 0.0) -> ChatGoogleGenerativeAI:
-    return ChatGoogleGenerativeAI(
-        model=settings.gemini_model, google_api_key=settings.google_api_key, temperature=temperature
-    )
+def _llm(temperature: float = 0.0) -> ChatGroq:
+    return ChatGroq(model=settings.groq_model, groq_api_key=settings.groq_api_key, temperature=temperature)
 
 
 def generate_sql(state: AgentState) -> AgentState:
@@ -41,7 +39,7 @@ def generate_sql(state: AgentState) -> AgentState:
         sql = extract_sql(response.content)
         return {**state, "sql": sql, "error": None}
     except Exception as exc:
-        # A transient Gemini failure (rate limit, timeout, ...) shouldn't crash the graph.
+        # A transient LLM API failure (rate limit, timeout, ...) shouldn't crash the graph.
         # Leaving sql=None means validate_select_only in run_sql reports "Empty query.",
         # which routes through the exact same retry/give_up logic as a bad SQL query --
         # no separate error-handling path needed.
