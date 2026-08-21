@@ -15,9 +15,18 @@ class ScoutRequest(BaseModel):
         max_length=500,
         examples=["Find me the top 3 center-backs by pass completion rate"],
     )
+    session_id: str | None = Field(
+        default=None,
+        description=(
+            "Omit on the first message and one will be created for you; send the same "
+            "value back on later messages to continue that conversation, so follow-ups "
+            "like 'and their goals?' resolve against what was already asked."
+        ),
+    )
 
 
 class ScoutResponse(BaseModel):
+    session_id: str
     question: str
     sql: str | None
     rows: list[dict] | None
