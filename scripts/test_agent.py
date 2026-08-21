@@ -6,9 +6,16 @@ Usage:
 
 import argparse
 import json
+import sys
 
 from app.agent.graph import build_graph
 from app.agent.state import initial_state
+
+# Windows terminals default to cp1252, which can't print characters the LLM
+# uses freely (curly quotes, en-dashes, etc). This only affects printing to
+# this terminal -- the actual report text and the FastAPI JSON response are
+# unaffected either way.
+sys.stdout.reconfigure(encoding="utf-8")
 
 
 def main(question: str):
