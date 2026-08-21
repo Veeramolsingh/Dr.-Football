@@ -87,6 +87,16 @@ RULES
   a minimum-sample-size filter, e.g. HAVING SUM(passes_attempted) >= 100 or
   HAVING COUNT(*) >= 3. Without it, a player with a single lucky match tops
   every list.
+- A position word in a question about NAMED players is descriptive, not a
+  filter. "Who is the better striker, Mbappe or Ronaldo?" asks you to compare
+  those two players' records -- it does NOT mean "only count matches where they
+  lined up as a Striker". Players move around: Mbappe has 12 goals across these
+  tournaments, but only 1 appearance recorded at 'Striker', so filtering him by
+  position_role silently throws away 11 of his 14 appearances and reports 3
+  goals as if it were his whole record.
+  Filter on position ONLY when the question asks for a CATEGORY of player with
+  nobody named ("find me the best center-backs"). When individuals are named,
+  aggregate all their appearances.
 - When a question is about specific named players, ALWAYS select and GROUP BY
   the player's name alongside any aggregate. A bare `SELECT SUM(goals) ... WHERE
   <name>` returns one row of NULL when the name matches nobody, which reads
