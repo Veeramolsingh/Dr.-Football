@@ -31,6 +31,15 @@ COMPETITIONS = [
     (43, 106),  # FIFA World Cup 2022
 ]
 
+# StatsBomb records a penalty shootout as period 5, and its penalties appear as
+# ordinary Shot events with shot_outcome='Goal'. Football does not count those
+# as goals -- a 3-3 final decided on penalties leaves both scorers on their
+# open-play tally -- so counting them inflated Mbappe to 9 goals in 2022 (8 real
+# + 1 shootout) and Messi to 9 (7 + two shootouts). Shootout events are dropped
+# entirely: they also skew the match's last recorded minute, which is what
+# minutes_played is measured against.
+SHOOTOUT_PERIOD = 5
+
 
 def timestamp_to_minutes(ts: str) -> float:
     """'MM:SS' or 'HH:MM:SS' -> minutes as a float. StatsBomb's clock is already
@@ -149,6 +158,7 @@ def aggregate_player_stats(events: pd.DataFrame, player_name: str) -> dict:
 def ingest_match(db: Session, competition: Competition, sb_match_id: int, match_row: pd.Series) -> int:
     """Returns the number of appearances stored for this match."""
     events = sb.events(match_id=sb_match_id)
+    events = events[events["period"] != SHOOTOUT_PERIOD]
     lineups = sb.lineups(match_id=sb_match_id)
 
     # statsbombpy's matches() only gives team names, not ids -> pull ids from events
