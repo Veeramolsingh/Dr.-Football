@@ -14,9 +14,14 @@ pydantic==2.7.4
 pydantic-settings==2.3.4
 
 # --- AI Orchestration ---
+# langchain-groq 0.1.9 is pinned specifically because it's the newest version
+# still compatible with langgraph 0.1.5's langchain-core<0.3 requirement --
+# langchain-groq's current release (1.x) needs langchain-core>=1.4, which
+# breaks langgraph 0.1.5 outright (a pydantic_v1 compat shim it depends on
+# was removed). Upgrade langgraph and langchain-groq together, not separately.
 langgraph==0.1.5
-langchain-google-genai==1.0.6
-langchain-core==0.2.9
+langchain-groq==0.1.9
+langchain-core==0.2.43
 
 # --- Utilities ---
 python-dotenv==1.0.1

@@ -14,7 +14,7 @@ FORBIDDEN_RE = re.compile(
 
 
 def extract_sql(raw: str) -> str:
-    """Gemini sometimes wraps its answer in a ```sql ... ``` fence; strip it if present."""
+    """The LLM sometimes wraps its answer in a ```sql ... ``` fence; strip it if present."""
     text = raw.strip()
     fence = FENCE_RE.match(text)
     if fence:
