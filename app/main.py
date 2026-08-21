@@ -9,8 +9,11 @@ Then either:
 """
 
 import uuid
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from app.agent.graph import build_graph
@@ -29,6 +32,16 @@ app = FastAPI(
 # the node functions together (no I/O), and invoking a compiled graph doesn't
 # mutate it, so sharing one instance across concurrent requests is safe.
 _graph = build_graph()
+
+# The chat UI is served from this same app, so the browser calls /scout on its
+# own origin -- no CORS configuration, no second process to run.
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+def chat_ui():
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/health")

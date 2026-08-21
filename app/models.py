@@ -39,7 +39,15 @@ class Player(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     statsbomb_player_id: Mapped[int] = mapped_column(Integer, unique=True)
+
+    # player_name is the full legal name StatsBomb records ("Kleper Laveran Lima
+    # Ferreira"); player_nickname is what commentary actually calls them
+    # ("Pepe"). search_name holds both, lowercased and stripped of accents, and
+    # is the column to match user-typed names against -- people type "Mbappe"
+    # and "Ronaldo", which match neither of the other two columns.
     player_name: Mapped[str] = mapped_column(String(150))
+    player_nickname: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    search_name: Mapped[str] = mapped_column(String(300), index=True)
 
     # The position this player appeared in most often across all their matches.
     # Backfilled after ingestion (see scripts/ingest_data.py:backfill_primary_positions)

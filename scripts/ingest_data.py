@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+import unicodedata
 from collections import Counter
 
 import pandas as pd
@@ -110,10 +111,30 @@ def ingest_team(db: Session, statsbomb_team_id: int, team_name: str) -> Team:
     )
 
 
-def ingest_player(db: Session, statsbomb_player_id: int, player_name: str) -> Player:
+def fold_accents(value: str) -> str:
+    """'Kylian Mbappe Lottin' from 'Kylian Mbappé Lottin' -- decompose to base
+    characters plus combining marks, then drop the marks. Users type names
+    without accents, so matching has to happen on a folded form."""
+    decomposed = unicodedata.normalize("NFKD", value)
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
+def build_search_name(player_name: str, nickname: str | None) -> str:
+    parts = [player_name, nickname or ""]
+    return fold_accents(" ".join(p for p in parts if p)).lower()
+
+
+def ingest_player(db: Session, statsbomb_player_id: int, player_name: str, nickname: str | None) -> Player:
     # primary_position is deliberately not set here -- see backfill_primary_positions()
     return get_or_create(
-        db, Player, {"statsbomb_player_id": statsbomb_player_id}, {"player_name": player_name}
+        db,
+        Player,
+        {"statsbomb_player_id": statsbomb_player_id},
+        {
+            "player_name": player_name,
+            "player_nickname": nickname,
+            "search_name": build_search_name(player_name, nickname),
+        },
     )
 
 
@@ -195,7 +216,10 @@ def ingest_match(db: Session, competition: Competition, sb_match_id: int, match_
                 continue
 
             role, group = normalise(position)
-            player = ingest_player(db, int(lp.player_id), lp.player_name)
+            # pandas yields NaN (a float), not None, for a missing nickname
+            nickname = lp.get("player_nickname")
+            nickname = None if nickname is None or pd.isna(nickname) else str(nickname)
+            player = ingest_player(db, int(lp.player_id), lp.player_name, nickname)
 
             get_or_create(
                 db,

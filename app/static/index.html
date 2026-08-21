@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dr. Football — Scout</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --line: #262b36;
+    --text: #e6e8ec;
+    --muted: #8b93a3;
+    --accent: #3ddc84;
+    --user: #1f2937;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .3px; }
+  header span { color: var(--muted); font-size: 13px; }
+  header button {
+    margin-left: auto; background: none; border: 1px solid var(--line);
+    color: var(--muted); padding: 5px 12px; border-radius: 6px;
+    cursor: pointer; font-size: 13px;
+  }
+  header button:hover { color: var(--text); border-color: var(--muted); }
+
+  #log { flex: 1; overflow-y: auto; padding: 22px 20px; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+
+  .msg { margin-bottom: 22px; }
+  .who { font-size: 11px; text-transform: uppercase; letter-spacing: .8px;
+         color: var(--muted); margin-bottom: 6px; }
+  .msg.user .bubble {
+    background: var(--user); padding: 10px 14px; border-radius: 10px;
+    display: inline-block; max-width: 100%;
+  }
+  .msg.doc .who { color: var(--accent); }
+  .msg.doc .bubble p { margin: 0 0 10px; }
+  .msg.doc .bubble p:last-child { margin-bottom: 0; }
+  .msg.err .bubble { color: #ff8f8f; }
+
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 12px; outline: none; }
+  summary:hover { color: var(--text); }
+  pre {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px; overflow-x: auto; font-size: 12.5px; color: #cbd5e1;
+    margin: 8px 0 0;
+  }
+  table { border-collapse: collapse; margin: 8px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 5px 10px; text-align: left; }
+  th { color: var(--muted); font-weight: 600; }
+
+  form {
+    border-top: 1px solid var(--line); padding: 14px 20px; background: var(--bg);
+  }
+  .row { max-width: 760px; margin: 0 auto; display: flex; gap: 10px; }
+  input {
+    flex: 1; background: var(--panel); border: 1px solid var(--line);
+    color: var(--text); padding: 11px 14px; border-radius: 8px;
+    font: inherit; outline: none;
+  }
+  input:focus { border-color: var(--accent); }
+  button.send {
+    background: var(--accent); color: #08130c; border: 0; padding: 0 20px;
+    border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.send:disabled { opacity: .5; cursor: default; }
+
+  .dots::after {
+    content: '·'; animation: dots 1.2s steps(4, end) infinite; color: var(--muted);
+  }
+  @keyframes dots {
+    0% { content: '·'; } 25% { content: '··'; }
+    50% { content: '···'; } 75% { content: '····'; }
+  }
+  .hint { color: var(--muted); font-size: 13px; }
+  .hint code {
+    background: var(--panel); padding: 1px 6px; border-radius: 4px;
+    border: 1px solid var(--line); cursor: pointer;
+  }
+  .hint code:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Dr. Football</h1>
+  <span>2018 &amp; 2022 World Cups</span>
+  <button id="reset" type="button">New conversation</button>
+</header>
+
+<div id="log">
+  <div class="wrap" id="wrap">
+    <div class="msg doc">
+      <div class="who">The Professor</div>
+      <div class="bubble">
+        <p>Ask me about the two World Cups. I remember what we've already discussed,
+           so you can follow up.</p>
+        <p class="hint">
+          Try:
+          <code>Who were the top scorers in 2022?</code>
+          <code>How many goals did Pepe score?</code>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<form id="form">
+  <div class="row">
+    <input id="q" autocomplete="off" placeholder="Ask about a player, a position, a tournament…" autofocus>
+    <button class="send" id="send" type="submit">Send</button>
+  </div>
+</form>
+
+<script>
+const wrap = document.getElementById('wrap');
+const log = document.getElementById('log');
+const form = document.getElementById('form');
+const input = document.getElementById('q');
+const sendBtn = document.getElementById('send');
+
+// The whole of the conversation state the client needs: the API remembers the
+// rest server-side, keyed by this id.
+let sessionId = null;
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// Deliberately tiny Markdown handling rather than pulling in a library: the
+// agent is prompted to write prose, so bold and the occasional table is the
+// whole surface area we actually need.
+function renderMarkdown(md) {
+  const blocks = escapeHtml(md).trim().split(/\n{2,}/);
+  return blocks.map(block => {
+    const lines = block.split('\n');
+    if (lines.length > 1 && lines.every(l => l.trim().startsWith('|'))) {
+      const rows = lines.filter(l => !/^\s*\|[\s|:-]+\|\s*$/.test(l));
+      const cells = rows.map(r => r.split('|').slice(1, -1).map(c => c.trim()));
+      const head = cells.shift();
+      return '<table><tr>' + head.map(h => `<th>${bold(h)}</th>`).join('') + '</tr>'
+        + cells.map(r => '<tr>' + r.map(c => `<td>${bold(c)}</td>`).join('') + '</tr>').join('')
+        + '</table>';
+    }
+    return `<p>${bold(block.replace(/\n/g, '<br>'))}</p>`;
+  }).join('');
+}
+function bold(s) { return s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); }
+
+function addMessage(who, cls, innerHtml) {
+  const el = document.createElement('div');
+  el.className = `msg ${cls}`;
+  el.innerHTML = `<div class="who">${who}</div><div class="bubble">${innerHtml}</div>`;
+  wrap.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  return el;
+}
+
+async function ask(question) {
+  addMessage('You', 'user', escapeHtml(question));
+  const pending = addMessage('The Professor', 'doc', '<span class="dots"></span>');
+  sendBtn.disabled = true;
+
+  try {
+    const res = await fetch('/scout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, session_id: sessionId })
+    });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+
+    const data = await res.json();
+    sessionId = data.session_id;   // first reply hands us the id; reuse it after
+
+    let html = renderMarkdown(data.report || '(no answer)');
+    if (data.sql) {
+      html += `<details><summary>SQL</summary><pre>${escapeHtml(data.sql)}</pre></details>`;
+    }
+    pending.querySelector('.bubble').innerHTML = html;
+  } catch (err) {
+    pending.className = 'msg err';
+    pending.querySelector('.bubble').textContent = `Couldn't reach the scout: ${err.message}`;
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  ask(q);
+});
+
+document.getElementById('reset').addEventListener('click', async () => {
+  if (sessionId) {
+    // Tell the server to forget it too, not just the browser.
+    await fetch(`/scout/${sessionId}`, { method: 'DELETE' }).catch(() => {});
+  }
+  sessionId = null;
+  wrap.innerHTML = '';
+  addMessage('The Professor', 'doc', '<p>Clean slate. Go again.</p>');
+  input.focus();
+});
+
+// Clicking an example question fills it in and sends it.
+wrap.addEventListener('click', e => {
+  if (e.target.tagName === 'CODE') {
+    input.value = e.target.textContent;
+    form.requestSubmit();
+  }
+});
+</script>
+</body>
+</html>
