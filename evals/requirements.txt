@@ -1,0 +1,7 @@
+# Judge-only dependencies. Install these in a SEPARATE venv from the app's:
+# deepeval pulls in a large tree that the agent itself never needs at runtime.
+#
+#   python -m venv .evalenv
+#   .evalenv/Scripts/pip install -r evals/requirements.txt
+deepeval==4.2.0
+groq==1.7.0
